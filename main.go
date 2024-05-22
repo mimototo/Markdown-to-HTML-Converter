@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -34,51 +36,57 @@ func main() {
 		fmt.Println("Can't open this file, sorry")
 		return
 	}
-	defer input.Close()
 
-	// ファイル内容を読み取る
-	var data []byte
-	buffer := make([]byte, 1024)
-	for {
-		count, err := input.Read(buffer)
-		if err != nil {
-			if err != io.EOF {
-				fmt.Println("failed to load file", err)
-				return
-			}
-			break
-		}
-		data = append(data, buffer[:count]...)
-	}
-
-	// ファイルの内容を逆順にする
-	reversedData := reverseBytes(data)
-
-	// Outputファイルを作成する
+	// 出力ファイルを作成
 	output, err := os.Create(outputFile)
 	if err != nil {
-		fmt.Println("Can't create the output file:", err)
+		fmt.Println("Cant't create the output file:", err)
 		return
 	}
-	defer output.Close()
+	defer func() {
+		err := output.Close()
+		if err != nil {
+			fmt.Println("Something to wrong", err)
+			return
+		}
+	}()
 
-	// 逆順にした内容をoutputファイルに書き込む
-	_, err = output.Write(reversedData)
+	// マークダウンをHTMLに変換する
+	err = convert(input, output)
 	if err != nil {
-		fmt.Println("fail to write to output file:", err)
-		return
+		fmt.Println("Conversion failed", err)
 	}
-
-	fmt.Println("File content reversed and written to", output)
 }
 
-func reverseBytes(data []byte) []byte {
-	length := len(data)
-	reversed := make([]byte, length)
+func convert(input io.Reader, output io.Writer) error {
+	scanner := bufio.NewScanner(input)
+	writer := bufio.NewWriter(output)
 
-	for i := range reversed {
-		reversed[length-i-1] = data[i]
+	for scanner.Scan() {
+		line := scanner.Text()
+		htmlLine := convertLine(line)
+		_, err := writer.WriteString(htmlLine + "\n")
+		if err != nil {
+			return err
+		}
 	}
 
-	return reversed
+	return writer.Flush()
+}
+
+func convertLine(line string) string {
+	switch {
+	case strings.HasPrefix(line, "# "):
+		return "<h1>" + strings.TrimPrefix(line, "# ") + "</h1>"
+	case strings.HasPrefix(line, "## "):
+		return "<h2>" + strings.TrimPrefix(line, "## ") + "</h2>"
+	case strings.HasPrefix(line, "### "):
+		return "<h3>" + strings.TrimPrefix(line, "### ") + "</h3>"
+	case strings.HasPrefix(line, "#### "):
+		return "<h4>" + strings.TrimPrefix(line, "#### ") + "</h4>"
+	case strings.HasPrefix(line, "##### "):
+		return "<h5>" + strings.TrimPrefix(line, "##### ") + "</h5>"
+	default:
+		return "<p>" + line + "<p>"
+	}
 }
